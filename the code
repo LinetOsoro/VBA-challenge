@@ -1,0 +1,213 @@
+Sub StockVolumeAndCalculateValue()
+
+    Dim lastRow As Long
+    Dim tickers As Collection
+    Dim cell As Range
+    Dim tickerValue As Variant
+    Dim tickerCell As Range
+    Dim I As Long
+    Dim ws As Worksheet
+
+    ' Turn off screen updating
+    Application.ScreenUpdating = False
+
+   ' Loop through each worksheet in the workbook
+    For Each ws In ThisWorkbook.Sheets
+   
+    ' Add Column Headers (only once)
+    If ws.Cells(1, 9).Value <> "Ticker" Then
+        ws.Cells(1, 9).Value = "Ticker"
+        ws.Cells(1, 10).Value = "Yearly Change"
+        ws.Cells(1, 11).Value = "Percent Change"
+        ws.Cells(1, 12).Value = "Total Stock Volume"
+        ws.Cells(1, 16).Value = "Ticker"
+        ws.Cells(1, 17).Value = "Value"
+        ws.Cells(2, 15).Value = "Greatest % Increase"
+        ws.Cells(3, 15).Value = "Greatest % Decrease"
+        ws.Cells(4, 15).Value = "Greatest Total Volume"
+    End If
+
+    'Loop through each cell in column A starting from the second row
+       
+    ' Find the last row with data in column A
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+
+    ' Create a Collection to store unique tickers
+    Set tickers = New Collection
+
+    ' Loop through each cell in column A starting from the second row
+    For Each cell In ws.Range("A2:A" & lastRow)
+        ' Check if the ticker is not already in the Collection
+        On Error Resume Next
+        tickers.Add cell.Value, CStr(cell.Value)
+        On Error GoTo 0
+    Next cell
+
+    ' Find the cell titled "Ticker" in column A
+    On Error Resume Next
+    Set tickerCell = ws.Rows("1:1").Find(What:="Ticker", LookIn:=xlValues, LookAt:=xlWhole)
+    On Error GoTo 0
+
+    If tickerCell Is Nothing Then
+        ' If "Ticker" cell is not found, create it in column A
+        Set tickerCell = ws.Cells(1, 1)
+        tickerCell.Value = "Ticker"
+    End If
+
+    ' Output unique tickers under the "Ticker" cell
+    For Each tickerValue In tickers
+        tickerCell.Offset(1, 0).Value = tickerValue
+        Set tickerCell = tickerCell.Offset(1, 0)
+    Next tickerValue
+
+    
+    ' Calculate Yearly Change, save in column J, and highlight cell
+     For I = 2 To lastRow
+        Dim yearlyChange As Double
+        Dim openPrice As Double
+        Dim closePrice As Double
+        closePrice = ws.Cells(I, 6).Value
+        openPrice = ws.Cells(I, 3).Value
+        yearlyChange = closePrice - openPrice
+
+        ws.Cells(I, 10).Value = yearlyChange
+
+        If yearlyChange < 0 Then
+            ws.Cells(I, 10).Interior.ColorIndex = 3
+        ElseIf yearlyChange > 0 Then
+            ws.Cells(I, 10).Interior.ColorIndex = 4
+        End If
+
+        ' Calculate percent change and save in column K
+        Dim percentChange As Double
+        If yearlyChange = 0 Or openPrice = 0 Then
+            ws.Cells(I, 11).Value = 0
+        Else
+            percentChange = yearlyChange / openPrice * 100
+            ws.Cells(I, 11).Value = Format(percentChange, "0.00%")
+        End If
+        Next I
+               
+        ' Loop through the rows to calculate Total Stock Volume, starting from the second row
+        
+        ' Define constants
+        tickerColumn = 9
+        volumeColumn = 7
+        totalStockColumn = 12 ' column for total stock volume
+        
+        ' Variables
+        Dim totalVolume As Double
+        totalVolume = 0
+
+        'Loop throught the rows starting from second row
+         For I = 2 To lastRow
+           'Row 1 should have header
+           ws.Cells(1, 12).Value = "Total Stock Volume"
+        
+            ' Check if the ticker type has changed
+            If ws.Cells(I, tickerColumn).Value <> ws.Cells(I - 1, tickerColumn).Value Then
+            
+            ' Print or process totals for the previous ticker type
+               ws.Cells(I - 1, totalStockColumn).Value = totalVolume
+            
+            ' Reset total volume for the new ticker type, starting at row 2
+            totalVolume = 0
+            End If
+        
+            ' Accumulate total volume
+            totalVolume = totalVolume + ws.Cells(I, volumeColumn).Value
+                       
+           ' Print the total volume for the last ticker type after the loop has finished
+            ws.Cells(lastRow, totalStockColumn).Value = totalVolume
+        Next I
+        
+             
+        ' Prepare for summary, to go to Greatvol, GreatInc and GreatDec
+        Dim GreatVol As Double
+        Dim GreatIncr As Double
+        Dim GreatDecr As Double
+    
+        GreatVol = ws.Cells(2, 12).Value
+        GreatIncr = ws.Cells(2, 12).Value
+        GreatDecr = ws.Cells(2, 12).Value
+    
+        ' Loop for summary
+        For I = 2 To lastRow
+        ' For greatest total volume
+        If ws.Cells(I, 7).Value > GreatVol Then
+        GreatVol = ws.Cells(I, 7).Value
+        ws.Cells(4, 16).Value = ws.Cells(I, 9).Value
+        End If
+
+        ' For greatest increase
+        If ws.Cells(I, 12).Value > GreatIncr Then
+        GreatIncr = ws.Cells(I, 12).Value
+        ws.Cells(2, 16).Value = ws.Cells(I, 9).Value
+        End If
+
+        ' For greatest decrease
+        If ws.Cells(I, 12).Value < GreatDecr Then
+        GreatDecr = ws.Cells(I, 12).Value
+        ws.Cells(3, 16).Value = ws.Cells(I, 9).Value
+        End If
+        
+        Next I
+        
+        'Print ticker changes to
+        ws.Cells(2, 16).Value = ws.Cells(2, 9).Value
+        ws.Cells(3, 16).Value = ws.Cells(3, 9).Value
+        ws.Cells(4, 16).Value = ws.Cells(4, 9).Value
+
+    
+        ' Write summary results in ws.Cells
+        ws.Cells(2, 16 + 1).Value = Format(GreatIncr, "0.00%")
+        ws.Cells(3, 16 + 1).Value = Format(GreatDecr, "0.00%")
+        ws.Cells(4, 16 + 1).Value = Format(GreatVol, "0.00")
+    
+       ' Set the columns to adjust
+        Set ColumnsToAdjust = ws.Columns("A:Q")
+        ' AutoFit the columns
+        ColumnsToAdjust.AutoFit
+    
+        ' Turn on screen updating
+        Application.ScreenUpdating = True
+    Next ws
+       
+End Sub
+
+Modified VBA code to run through all sheets and produce same results by ...
+
+ replacing (line 14 and 15)
+' Set the active sheet as ws
+    Set ws = ActiveSheet
+With 
+
+‘ Loop through each worksheet in the workbook
+    For Each ws In ThisWorkbook.Sheets
+
+and Adding Next ws (on line 174) before Ending the Sub 
+and running it again and produced the same results
+
+
+Websites used to assist with the challenge 
+
+https://support.microsoft.com/en-au/topic/macro-to-loop-through-all-worksheets-in-a-workbook-feef14e3-97cf-00e2-538b-5da40186e2b0
+
+
+
+https://www.statology.org/vba-get-unique-values-from-column/#:~:text=You%20can%20use%20the%20AdvancedFilter,from%20a%20column%20in%20Excel.
+
+
+https://www.excelanytime.com/excel/index.php?Itemid=475&catid=79&id=86:last-used-row-last-used-column-vba&option=com_content&view=article 
+
+https://www.automateexcel.com/vba/call-sub-from-another-sub/#using-the-call-statement 
+
+https://learn.microsoft.com/en-us/office/vba/api/overview/ 
+
+https://excelmacromastery.com/vba-string-functions/ 
+
+https://excelmacromastery.com/vba-error-handling/ 
+
+
+
+
